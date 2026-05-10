@@ -185,21 +185,25 @@ function detectSwaps(txs, transfers) {
     const inbound = grouped.filter((t) => t.to === wallet)
 
     if (grouped.length >= 2) {
-  console.log('tx candidate', {
-    txHash,
-    wallet,
-    txMethod: tx.method,
-    contractName: tx.contractName,
-    grouped: grouped.map((t) => ({
-      from: t.from,
-      to: t.to,
-      tokenSymbol: t.tokenSymbol,
-      tokenAddress: t.tokenAddress,
-      amount: t.amount,
-    })),
-    outboundCount: outbound.length,
-    inboundCount: inbound.length,
-  })
+  console.log(
+    'tx candidate JSON',
+    JSON.stringify({
+      txHash,
+      wallet,
+      txMethod: tx.method,
+      contractName: tx.contractName,
+      grouped: grouped.map((t) => ({
+        from: t.from,
+        to: t.to,
+        tokenSymbol: t.tokenSymbol,
+        tokenAddress: t.tokenAddress,
+        amount: t.amount,
+        decimals: t.decimals,
+      })),
+      outboundCount: outbound.length,
+      inboundCount: inbound.length,
+    }, null, 2)
+  )
 }
 
     if (outbound.length === 0 || inbound.length === 0) continue
