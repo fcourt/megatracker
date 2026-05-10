@@ -23,7 +23,9 @@ import { computeFullStats } from './_utils/stats.js'
 
 // Nombre max de pages Blockscout par wallet par appel
 // 2 pages ≈ 100 txs max par wallet — équilibre vitesse / complétude
-const MAX_PAGES = 2
+//const MAX_PAGES = 2
+// api/analyze.js
+const MAX_PAGES = 1  // ← réduit de 2 à 1 pendant les tests
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
