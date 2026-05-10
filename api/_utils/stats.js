@@ -158,6 +158,7 @@ function computeWalletStats(address, txs, transfers) {
  * Extrait les swaps directement depuis le champ tx.swap
  * pré-calculé par blockscout.js lors de la normalisation.
  */
+/*
 function detectSwaps(txs, transfers) {
   const txMap = new Map(txs.map((tx) => [tx.hash, tx]))
   const transfersByHash = new Map()
@@ -211,6 +212,59 @@ function detectSwaps(txs, transfers) {
     if (tokenOutTransfer.tokenSymbol === tokenInTransfer.tokenSymbol) continue
 
     swaps.push(buildSwap(tx, wallet, tokenInTransfer, tokenOutTransfer))
+  }
+
+  return swaps.sort((a, b) => (b.timestamp ?? '').localeCompare(a.timestamp ?? ''))
+}
+*/
+
+function detectSwaps(txs, transfers) {
+  const txMap = new Map(txs.map((tx) => [tx.hash, tx]))
+
+  const transfersByHash = new Map()
+  for (const tr of transfers) {
+    if (!tr.txHash) continue
+    if (!transfersByHash.has(tr.txHash)) {
+      transfersByHash.set(tr.txHash, [])
+    }
+    transfersByHash.get(tr.txHash).push(tr)
+  }
+
+  const swaps = []
+
+  for (const [txHash, grouped] of transfersByHash.entries()) {
+    const tx = txMap.get(txHash)
+    if (!tx || tx.status !== 'success') continue
+
+    const wallet = tx.wallet?.toLowerCase()
+    if (!wallet) continue
+
+    const outbound = grouped.filter((t) => t.from === wallet)
+    const inbound = grouped.filter((t) => t.to === wallet)
+
+    if (outbound.length === 0 || inbound.length === 0) continue
+
+    const candidateOuts = outbound.filter(isValidSwapTransfer)
+    const candidateIns = inbound.filter(isValidSwapTransfer)
+
+    if (candidateOuts.length === 0 || candidateIns.length === 0) continue
+
+    let best = null
+
+    for (const outTr of candidateOuts) {
+      for (const inTr of candidateIns) {
+        if (!isPlausiblePair(outTr, inTr)) continue
+
+        const score = scoreSwapCandidate(tx, grouped, outTr, inTr, wallet)
+        if (!best || score > best.score) {
+          best = { score, outTr, inTr }
+        }
+      }
+    }
+
+    if (!best || best.score < 4) continue
+
+    swaps.push(buildSwap(tx, wallet, best.inTr, best.outTr))
   }
 
   return swaps.sort((a, b) => (b.timestamp ?? '').localeCompare(a.timestamp ?? ''))
@@ -327,6 +381,57 @@ function toDecimal(rawAmount, decimals = 18) {
   }
 }
 
+function isValidSwapTransfer(tr) {
+  if (!tr) return false
+  if (!tr.tokenSymbol) return false
+  if (!tr.amount || tr.amount === '0') return false
+  return true
+}
+
+function isPlausiblePair(outTr, inTr) {
+  if (outTr.tokenAddress && inTr.tokenAddress && outTr.tokenAddress === inTr.tokenAddress) {
+    return false
+  }
+  if (outTr.tokenSymbol && inTr.tokenSymbol && outTr.tokenSymbol === inTr.tokenSymbol) {
+    return false
+  }
+  return true
+}
+
+function scoreSwapCandidate(tx, grouped, outTr, inTr, wallet) {
+  let score = 0
+
+  const outAmount = toDecimal(outTr.amount, outTr.decimals)
+  const inAmount = toDecimal(inTr.amount, inTr.decimals)
+
+  if (outAmount > 0) score += 1
+  if (inAmount > 0) score += 1
+
+  if (outTr.from === wallet) score += 1
+  if (inTr.to === wallet) score += 1
+
+  if (tx.contractName) score += 1
+  if (tx.method) score += 1
+
+  const routerHints = ['swap', 'router', 'dex', 'aggregator']
+  const contractHint = `${tx.contractName ?? ''} ${tx.method ?? ''}`.toLowerCase()
+  if (routerHints.some((h) => contractHint.includes(h))) score += 2
+
+  if (grouped.length >= 2) score += 1
+  if (grouped.length >= 3) score += 1
+
+  const sameSymbol = outTr.tokenSymbol === inTr.tokenSymbol
+  if (sameSymbol) score -= 2
+
+  const weirdRatio = outAmount > 0 && inAmount > 0
+    ? Math.max(outAmount, inAmount) / Math.max(1e-18, Math.min(outAmount, inAmount))
+    : 999999
+
+  if (weirdRatio > 1e9) score -= 1
+
+  return score
+}
+
 /**
  * Estimation très simple de la valeur USD d'un swap.
  * En production, il faudrait appeler un oracle de prix (CoinGecko, etc.).
@@ -351,6 +456,7 @@ function estimateSwapValueUsd(tokenIn, tokenOut) {
   if (priceOut != null && priceOut > 0) return amountOut * priceOut
   return 0
 }
+
 
 
 
