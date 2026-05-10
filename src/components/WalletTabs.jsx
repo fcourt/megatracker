@@ -60,7 +60,7 @@ export default function WalletTabs({ wallets, perWallet }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-8)' }}>
 
           {/* ✅ walletData directement, pas walletData.stats */}
-          <KpiCards stats={walletData} />
+          <KpiCards stats={walletData.stats} />
 
           <div className="grid-charts">
             <div className="card">
@@ -89,12 +89,12 @@ export default function WalletTabs({ wallets, perWallet }) {
 
           <div className="grid-kpi">
             {/* ✅ walletData.xxx directement, pas walletData.stats.xxx */}
-            <InfoCard label="Première transaction" value={walletData.firstTxDate ?? '—'} />
-            <InfoCard label="Dernière transaction"  value={walletData.lastTxDate ?? '—'} />
-            <InfoCard label="Jours actifs"          value={walletData.activeDays ?? '—'} />
+            <InfoCard label="Première transaction" value={walletData.stats?.firstTxDate ?? '—'} />
+            <InfoCard label="Dernière transaction"  value={walletData.stats?.lastTxDate ?? '—'} />
+            <InfoCard label="Jours actifs"          value={walletData.stats?.activeDays ?? '—'} />
             <InfoCard
               label="Taux de succès"
-              value={walletData.successRate != null ? `${walletData.successRate}%` : '—'}
+              value={walletData.stats?.successRate != null ? `${walletData.stats.successRate}%` : '—'}
             />
           </div>
 
