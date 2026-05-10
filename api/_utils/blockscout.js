@@ -64,6 +64,7 @@ export async function getAddressTransactions(address, maxPages = 5) {
   // pour limiter les appels API
   const candidates = transactions.filter(
     (tx) => tx.contractAddress !== null && tx.status === 'success'
+    .slice(0, 15)  // ← max 15 enrichissements par wallet (~2.25s)
   )
 
   // Fetch en série avec délai pour respecter le rate-limit Blockscout
