@@ -19,7 +19,7 @@ export default function App() {
   const normalized = addresses.map((a) => a.trim().toLowerCase())
 
   setLoading(true)
-  setError(null)
+  setError(null)  
   setAnalysisData(null)
   setWallets(normalized)
 
@@ -53,6 +53,12 @@ export default function App() {
     }
 
     const statsData = await statsRes.json()
+
+    //log temporaires
+    console.log('statsData', statsData)
+    console.log('global keys', Object.keys(statsData.global ?? {}))
+    console.log('perWallet keys', Object.keys(statsData.perWallet ?? {}))
+    
     setAnalysisData(statsData)
   } catch (e) {
     setError(e.message)
