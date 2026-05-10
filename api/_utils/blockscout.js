@@ -1,21 +1,13 @@
 /**
  * Client Blockscout pour MegaETH
- * Doc : https://megaeth.blockscout.com/api/v2
- *
- * Toutes les fonctions retournent des données normalisées.
- * En cas d'erreur réseau ou de rate-limit, on throw avec un message clair.
+ * Base URL : https://megaeth.blockscout.com/api/v2
  */
 
 const BASE_URL = 'https://megaeth.blockscout.com/api/v2'
-
-// Délai entre les appels pour éviter le rate-limit (ms)
-const DELAY_MS = 120
+const DELAY_MS = 150
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
-/**
- * Fetch générique avec gestion d'erreurs.
- */
 async function bsFetch(path, params = {}) {
   const url = new URL(`${BASE_URL}${path}`)
   Object.entries(params).forEach(([k, v]) => {
@@ -23,13 +15,10 @@ async function bsFetch(path, params = {}) {
   })
 
   const res = await fetch(url.toString(), {
-    headers: {
-      Accept: 'application/json',
-    },
+    headers: { Accept: 'application/json' },
   })
 
   if (res.status === 429) {
-    // Rate-limit : on attend et on réessaie une fois
     await sleep(1500)
     const retry = await fetch(url.toString(), { headers: { Accept: 'application/json' } })
     if (!retry.ok) throw new Error(`Blockscout rate-limit persistant sur ${path}`)
@@ -44,12 +33,8 @@ async function bsFetch(path, params = {}) {
 }
 
 /**
- * Récupère toutes les transactions d'une adresse (pagination automatique).
- * Limite à maxPages pour rester sous le timeout Vercel (10s).
- *
- * @param {string} address  - Adresse 0x...
- * @param {number} maxPages - Nombre max de pages (défaut 5 = ~250 txs)
- * @returns {Promise<NormalizedTx[]>}
+ * Récupère les transactions d'une adresse.
+ * NOTE : le paramètre filter "to | from" a été supprimé (422 sur Blockscout v9+)
  */
 export async function getAddressTransactions(address, maxPages = 5) {
   const transactions = []
@@ -57,10 +42,8 @@ export async function getAddressTransactions(address, maxPages = 5) {
   let page = 0
 
   while (page < maxPages) {
-    const params = {
-      filter: 'to | from',
-      ...(nextPageParams ?? {}),
-    }
+    // Pas de paramètre filter — Blockscout v9 retourne toutes les txs par défaut
+    const params = { ...(nextPageParams ?? {}) }
 
     const data = await bsFetch(`/addresses/${address}/transactions`, params)
     await sleep(DELAY_MS)
@@ -70,7 +53,6 @@ export async function getAddressTransactions(address, maxPages = 5) {
       transactions.push(normalizeTx(tx, address))
     }
 
-    // Blockscout v2 utilise next_page_params pour la pagination keyset
     if (data.next_page_params && Object.keys(data.next_page_params).length > 0) {
       nextPageParams = data.next_page_params
       page++
@@ -83,12 +65,7 @@ export async function getAddressTransactions(address, maxPages = 5) {
 }
 
 /**
- * Récupère les token transfers (ERC-20) d'une adresse.
- * Utile pour détecter les swaps et calculer les volumes.
- *
- * @param {string} address
- * @param {number} maxPages
- * @returns {Promise<NormalizedTransfer[]>}
+ * Récupère les token transfers ERC-20 d'une adresse.
  */
 export async function getTokenTransfers(address, maxPages = 3) {
   const transfers = []
@@ -121,10 +98,7 @@ export async function getTokenTransfers(address, maxPages = 3) {
 }
 
 /**
- * Récupère les infos d'un smart contract (nom, ABI, protocole).
- *
- * @param {string} address
- * @returns {Promise<ContractInfo|null>}
+ * Infos d'un smart contract.
  */
 export async function getContractInfo(address) {
   try {
@@ -136,68 +110,49 @@ export async function getContractInfo(address) {
       compiler: data.compiler_version ?? null,
     }
   } catch {
-    // Contrat non vérifié ou adresse EOA — pas bloquant
     return null
   }
 }
 
 /**
- * Récupère le résumé d'une adresse (balance, tx count, etc.)
- *
- * @param {string} address
- * @returns {Promise<AddressSummary>}
+ * Résumé d'une adresse.
  */
 export async function getAddressSummary(address) {
   const data = await bsFetch(`/addresses/${address}`)
   return {
     address,
-    txCount:       data.transaction_count ?? 0,
-    tokenCount:    data.token_transfers_count ?? 0,
-    isContract:    data.is_contract ?? false,
-    name:          data.name ?? null,
-    ensName:       data.ens_domain_name ?? null,
+    txCount:    data.transaction_count ?? 0,
+    tokenCount: data.token_transfers_count ?? 0,
+    isContract: data.is_contract ?? false,
+    name:       data.name ?? null,
+    ensName:    data.ens_domain_name ?? null,
   }
 }
 
 /* ── Normaliseurs ── */
 
-/**
- * Normalise une transaction Blockscout v2.
- * @param {object} tx
- * @param {string} walletAddress
- * @returns {NormalizedTx}
- */
 function normalizeTx(tx, walletAddress) {
   const ts = tx.timestamp ? new Date(tx.timestamp) : null
-
   return {
-    hash:        tx.hash,
-    wallet:      walletAddress.toLowerCase(),
-    blockNumber: tx.block ?? null,
-    timestamp:   ts?.toISOString() ?? null,
-    date:        ts ? ts.toISOString().slice(0, 10) : null,
-    from:        tx.from?.hash?.toLowerCase() ?? null,
-    to:          tx.to?.hash?.toLowerCase() ?? null,
-    value:       tx.value ?? '0',
-    gasUsed:     parseInt(tx.gas_used ?? '0', 10),
-    gasPrice:    tx.gas_price ?? '0',
-    status:      tx.status === 'ok' ? 'success' : 'failed',
-    method:      tx.method ?? null,
-    // Le destinataire est considéré comme un contrat interagi
+    hash:            tx.hash,
+    wallet:          walletAddress.toLowerCase(),
+    blockNumber:     tx.block ?? null,
+    timestamp:       ts?.toISOString() ?? null,
+    date:            ts ? ts.toISOString().slice(0, 10) : null,
+    from:            tx.from?.hash?.toLowerCase() ?? null,
+    to:              tx.to?.hash?.toLowerCase() ?? null,
+    value:           tx.value ?? '0',
+    gasUsed:         parseInt(tx.gas_used ?? '0', 10),
+    gasPrice:        tx.gas_price ?? '0',
+    status:          tx.status === 'ok' ? 'success' : 'failed',
+    method:          tx.method ?? null,
     contractAddress: tx.to?.is_contract ? tx.to.hash?.toLowerCase() : null,
     contractName:    tx.to?.name ?? null,
   }
 }
 
-/**
- * Normalise un token transfer Blockscout v2.
- * @param {object} t
- * @param {string} walletAddress
- * @returns {NormalizedTransfer}
- */
 function normalizeTransfer(t, walletAddress) {
   const ts = t.timestamp ? new Date(t.timestamp) : null
-
   return {
     txHash:       t.tx_hash,
     wallet:       walletAddress.toLowerCase(),
