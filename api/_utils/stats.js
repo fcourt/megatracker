@@ -216,7 +216,7 @@ function detectSwaps(txs, transfers) {
 
   return swaps.sort((a, b) => (b.timestamp ?? '').localeCompare(a.timestamp ?? ''))
 }
-*/
+
 
 function detectSwaps(txs, transfers) {
   const txMap = new Map(txs.map((tx) => [tx.hash, tx]))
@@ -290,6 +290,102 @@ function detectSwaps(txs, transfers) {
   }
 
   return swaps.sort((a, b) => (b.timestamp ?? '').localeCompare(a.timestamp ?? ''))
+}
+*/
+
+function detectSwaps(txs, transfers) {
+  const txMap = new Map(txs.map((tx) => [tx.hash, tx]))
+  const transfersByHash = new Map()
+
+  for (const tr of transfers) {
+    if (!tr.txHash) continue
+    if (!transfersByHash.has(tr.txHash)) transfersByHash.set(tr.txHash, [])
+    transfersByHash.get(tr.txHash).push(tr)
+  }
+
+  const swaps = []
+
+  for (const [txHash, grouped] of transfersByHash.entries()) {
+    const tx = txMap.get(txHash)
+    if (!tx || tx.status !== 'success') continue
+
+    const wallet = tx.wallet?.toLowerCase()
+    if (!wallet) continue
+
+    const walletOut = grouped.filter((t) => t.from === wallet)
+    const walletIn = grouped.filter((t) => t.to === wallet)
+
+    if (walletOut.length === 0 || walletIn.length === 0) continue
+
+    const outCandidates = walletOut
+      .map((t) => ({ t, amount: toDecimal(t.amount, t.decimals) }))
+      .filter(({ amount }) => amount > 0)
+      .sort((a, b) => b.amount - a.amount)
+
+    const inCandidates = walletIn
+      .map((t) => ({ t, amount: toDecimal(t.amount, t.decimals) }))
+      .filter(({ amount }) => amount > 0)
+      .sort((a, b) => b.amount - a.amount)
+
+    if (!outCandidates.length || !inCandidates.length) continue
+
+    let best = null
+
+    for (const out of outCandidates.slice(0, 3)) {
+      for (const inn of inCandidates.slice(0, 3)) {
+        if (!isPlausibleSwapPair(out.t, inn.t)) continue
+
+        const score = scoreSwapCandidate(tx, grouped, out.t, inn.t, wallet)
+        if (!best || score > best.score) {
+          best = { score, out: out.t, inn: inn.t }
+        }
+      }
+    }
+
+    if (!best || best.score < 5) continue
+
+    swaps.push(buildSwap(tx, wallet, best.inn, best.out))
+  }
+
+  return swaps.sort((a, b) => (b.timestamp ?? '').localeCompare(a.timestamp ?? ''))
+}
+
+function isPlausibleSwapPair(outTr, inTr) {
+  if (!outTr || !inTr) return false
+  if (outTr.tokenSymbol && inTr.tokenSymbol && outTr.tokenSymbol === inTr.tokenSymbol) return false
+  if (outTr.tokenAddress && inTr.tokenAddress && outTr.tokenAddress === inTr.tokenAddress) return false
+  return true
+}
+
+function scoreSwapCandidate(tx, grouped, outTr, inTr, wallet) {
+  let score = 0
+
+  const outAmount = toDecimal(outTr.amount, outTr.decimals)
+  const inAmount = toDecimal(inTr.amount, inTr.decimals)
+
+  if (outAmount > 0) score += 1
+  if (inAmount > 0) score += 1
+  if (outTr.from === wallet) score += 1
+  if (inTr.to === wallet) score += 1
+
+  const hint = `${tx.contractName ?? ''} ${tx.method ?? ''}`.toLowerCase()
+  if (/(swap|router|dex|agg|aggregator)/.test(hint)) score += 2
+
+  if (grouped.length >= 2) score += 1
+  if (grouped.length >= 3) score += 1
+
+  const outSym = (outTr.tokenSymbol ?? '').toUpperCase()
+  const inSym = (inTr.tokenSymbol ?? '').toUpperCase()
+  if (['USDC', 'USDT', 'DAI', 'USDM', 'USDT0'].includes(outSym)) score += 1
+  if (['USDC', 'USDT', 'DAI', 'USDM', 'USDT0'].includes(inSym)) score += 1
+
+  const ratio = outAmount > 0 && inAmount > 0
+    ? Math.max(outAmount, inAmount) / Math.max(1e-18, Math.min(outAmount, inAmount))
+    : Infinity
+  if (ratio < 1e6) score += 1
+  if (ratio > 1e12) score -= 1
+
+  return score
 }
 
 function pickRelevantTransfer(transfers, direction) {
