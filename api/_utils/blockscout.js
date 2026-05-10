@@ -36,9 +36,10 @@ export async function bsFetch(path, params = {}) {
  * Récupère les transactions d'une adresse.
  * NOTE : le paramètre filter "to | from" a été supprimé (422 sur Blockscout v9+)
  */
-export async function getAddressTransactions(address, maxPages = 5) {
+// api/_utils/blockscout.js
+export async function getAddressTransactions(address, maxPages = 1, initialPageParams = null) {
   const transactions = []
-  let nextPageParams = null
+  let nextPageParams = initialPageParams  // ← reprend depuis le curseur client
   let page = 0
 
   while (page < maxPages) {
@@ -54,12 +55,13 @@ export async function getAddressTransactions(address, maxPages = 5) {
       nextPageParams = data.next_page_params
       page++
     } else {
+      nextPageParams = null
       break
     }
   }
 
-  // Plus d'enrichissement ici — délégué au client via /api/enrich-swaps
-  return transactions
+  // Retourne aussi le curseur pour la prochaine page
+  return { transactions, nextPageParams }
 }
 
 /**
