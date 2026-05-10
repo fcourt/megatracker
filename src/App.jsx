@@ -16,32 +16,50 @@ export default function App() {
   }
 
   const handleAnalyze = useCallback(async (addresses) => {
-    setLoading(true)
-    setError(null)
-    setAnalysisData(null)
-    setWallets(addresses)
+  const normalized = addresses.map((a) => a.trim().toLowerCase())
 
-    try {
-      const res = await fetch('/api/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ addresses }),
-      })
+  setLoading(true)
+  setError(null)
+  setAnalysisData(null)
+  setWallets(normalized)
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.message || `Erreur serveur (${res.status})`)
-      }
+  try {
+    const analyzeRes = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ addresses: normalized }),
+    })
 
-      const data = await res.json()
-      setAnalysisData(data)
-    } catch (e) {
-      setError(e.message)
-    } finally {
-      setLoading(false)
+    if (!analyzeRes.ok) {
+      const err = await analyzeRes.json().catch(() => ({}))
+      throw new Error(err.message || `Erreur serveur (${analyzeRes.status})`)
     }
-  }, [])
 
+    const analyzeData = await analyzeRes.json()
+
+    const statsRes = await fetch('/api/compute-stats', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        addresses: normalized,
+        transactions: analyzeData.transactions ?? [],
+        transfers: analyzeData.transfers ?? [],
+      }),
+    })
+
+    if (!statsRes.ok) {
+      const err = await statsRes.json().catch(() => ({}))
+      throw new Error(err.message || `Erreur stats (${statsRes.status})`)
+    }
+
+    const statsData = await statsRes.json()
+    setAnalysisData(statsData)
+  } catch (e) {
+    setError(e.message)
+  } finally {
+    setLoading(false)
+  }
+}, [])
   return (
     <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column' }}>
       {/* ── Header ── */}
