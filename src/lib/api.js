@@ -1,53 +1,93 @@
-const BASE = '/api'
-
 /**
- * Lance l'analyse complète d'une liste d'adresses.
+ * Orchestre l'analyse complète d'un ou plusieurs wallets.
+ * Gère la pagination et l'enrichissement des swaps en arrière-plan.
+ *
  * @param {string[]} addresses
- * @returns {Promise<object>} data structurée pour le Dashboard
+ * @param {function} onProgress - callback({ step, percent, message })
+ * @returns {Promise<AnalysisResult>}
  */
-export async function analyzeWallets(addresses) {
-  const res = await fetch(`${BASE}/analyze`, {
+export async function analyzeWallets(addresses, onProgress = () => {}) {
+
+  // ── Phase 1 : listing des transactions ──
+  onProgress({ step: 'fetch', percent: 10, message: 'Récupération des transactions…' })
+
+  const { transactions, summaries, meta } = await apiFetch('/api/analyze', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ addresses }),
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.message ?? `Erreur ${res.status}`)
-  }
-  return res.json()
-}
 
-/**
- * Récupère les transactions paginées d'une adresse.
- * @param {string} address
- * @param {number} page
- */
-export async function fetchTransactions(address, page = 1) {
-  const res = await fetch(
-    `${BASE}/fetch-txs?address=${encodeURIComponent(address)}&page=${page}`
+  onProgress({ step: 'fetch', percent: 40, message: `${transactions.length} transactions récupérées` })
+
+  // ── Phase 2 : enrichissement des swaps par batches de 10 ──
+  const candidates = transactions.filter(
+    (tx) => tx.contractAddress !== null && tx.status === 'success'
   )
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.message ?? `Erreur ${res.status}`)
+
+  const BATCH_SIZE = 10
+  const enrichedSwaps = new Map()  // hash → swap
+
+  // Groupe les candidats par wallet pour l'appel
+  const byWallet = new Map()
+  for (const tx of candidates) {
+    if (!byWallet.has(tx.wallet)) byWallet.set(tx.wallet, [])
+    byWallet.get(tx.wallet).push(tx.hash)
   }
-  return res.json()
+
+  let processedCount = 0
+  const totalCandidates = candidates.length
+
+  for (const [wallet, hashes] of byWallet) {
+    // Découpe en batches
+    for (let i = 0; i < hashes.length; i += BATCH_SIZE) {
+      const batch = hashes.slice(i, i + BATCH_SIZE)
+
+      const result = await apiFetch('/api/enrich-swaps', {
+        method: 'POST',
+        body: JSON.stringify({ hashes: batch, wallet }),
+      })
+
+      for (const { hash, swap } of result.swaps ?? []) {
+        enrichedSwaps.set(hash, swap)
+      }
+
+      processedCount += batch.length
+      const percent = 40 + Math.round((processedCount / totalCandidates) * 40)
+      onProgress({
+        step: 'enrich',
+        percent,
+        message: `Analyse des swaps… ${processedCount}/${totalCandidates}`,
+      })
+    }
+  }
+
+  // ── Fusionne les swaps dans les transactions ──
+  const enrichedTransactions = transactions.map((tx) =>
+    enrichedSwaps.has(tx.hash)
+      ? { ...tx, swap: enrichedSwaps.get(tx.hash) }
+      : tx
+  )
+
+  onProgress({ step: 'compute', percent: 85, message: 'Calcul des statistiques…' })
+
+  // ── Phase 3 : calcul des stats ──
+  const stats = await apiFetch('/api/compute-stats', {
+    method: 'POST',
+    body: JSON.stringify({ addresses, transactions: enrichedTransactions }),
+  })
+
+  onProgress({ step: 'done', percent: 100, message: 'Analyse terminée' })
+
+  return { ...stats, meta }
 }
 
-/**
- * Calcule les statistiques à partir de transactions brutes.
- * @param {string[]} addresses
- * @param {object[]} transactions
- */
-export async function computeStats(addresses, transactions) {
-  const res = await fetch(`${BASE}/compute-stats`, {
-    method: 'POST',
+async function apiFetch(url, options = {}) {
+  const res = await fetch(url, {
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ addresses, transactions }),
+    ...options,
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    throw new Error(err.message ?? `Erreur ${res.status}`)
+    throw new Error(err.message ?? `HTTP ${res.status}`)
   }
   return res.json()
 }
