@@ -37,6 +37,8 @@ export default function App() {
 
     const analyzeData = await analyzeRes.json()
 
+    //retrait temporaire
+    /*
     const statsRes = await fetch('/api/compute-stats', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -46,7 +48,7 @@ export default function App() {
         transfers: analyzeData.transfers ?? [],
       }),
     })
-
+    
     if (!statsRes.ok) {
       const err = await statsRes.json().catch(() => ({}))
       throw new Error(err.message || `Erreur stats (${statsRes.status})`)
@@ -60,8 +62,39 @@ export default function App() {
     console.log('perWallet keys', Object.keys(statsData.perWallet ?? {}))
     
     setAnalysisData(statsData)
+    */
+
+    const statsRes = await fetch('/api/compute-stats', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    addresses: normalized,
+    transactions: analyzeData.transactions ?? [],
+    transfers: analyzeData.transfers ?? [],
+  }),
+})
+
+const statsBody = await statsRes.json().catch(() => null)
+console.log('stats status', statsRes.status)
+console.log('stats body', statsBody)
+
+if (!statsRes.ok) {
+  throw new Error(
+    statsBody?.detail ||
+    statsBody?.message ||
+    `Erreur stats (${statsRes.status})`
+  )
+}
+
+const statsData = statsBody
+console.log('statsData', statsData)
+console.log('global keys', Object.keys(statsData.global ?? {}))
+console.log('perWallet keys', Object.keys(statsData.perWallet ?? {}))
+
+setAnalysisData(statsData)
+    
   } catch (e) {
-    setError(e.message)
+    setError(e?.message ?? 'Erreur inconnue')
   } finally {
     setLoading(false)
   }
