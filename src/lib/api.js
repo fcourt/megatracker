@@ -8,25 +8,43 @@
  */
 export async function analyzeWallets(addresses, onProgress = () => {}) {
 
-  // ── Phase 1 : listing des transactions ──
-  onProgress({ step: 'fetch', percent: 10, message: 'Récupération des transactions…' })
+  // ── Phase 1 : fetch toutes les pages ──
+  onProgress({ step: 'fetch', percent: 5, message: 'Récupération des transactions…' })
 
-  const { transactions, summaries, meta } = await apiFetch('/api/analyze', {
-    method: 'POST',
-    body: JSON.stringify({ addresses }),
-  })
+  let allTransactions = []
+  let cursors = {}
+  let page = 0
 
-  onProgress({ step: 'fetch', percent: 40, message: `${transactions.length} transactions récupérées` })
+  do {
+    const payload = { addresses }
+    if (Object.keys(cursors).length > 0) payload.cursors = cursors
+
+    const result = await apiFetch('/api/analyze', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+
+    allTransactions = [...allTransactions, ...(result.transactions ?? [])]
+    cursors = result.cursors ?? {}
+    page++
+
+    onProgress({
+      step: 'fetch',
+      percent: Math.min(5 + page * 8, 35),
+      message: `${allTransactions.length} transactions récupérées…`,
+    })
+  } while (Object.keys(cursors).length > 0 && page < 20)
+
+  onProgress({ step: 'fetch', percent: 40, message: `${allTransactions.length} transactions au total` })
 
   // ── Phase 2 : enrichissement des swaps par batches de 10 ──
-  const candidates = transactions.filter(
+  const candidates = allTransactions.filter(         // ← allTransactions, pas transactions
     (tx) => tx.contractAddress !== null && tx.status === 'success'
   )
 
   const BATCH_SIZE = 10
-  const enrichedSwaps = new Map()  // hash → swap
+  const enrichedSwaps = new Map()
 
-  // Groupe les candidats par wallet pour l'appel
   const byWallet = new Map()
   for (const tx of candidates) {
     if (!byWallet.has(tx.wallet)) byWallet.set(tx.wallet, [])
@@ -37,7 +55,6 @@ export async function analyzeWallets(addresses, onProgress = () => {}) {
   const totalCandidates = candidates.length
 
   for (const [wallet, hashes] of byWallet) {
-    // Découpe en batches
     for (let i = 0; i < hashes.length; i += BATCH_SIZE) {
       const batch = hashes.slice(i, i + BATCH_SIZE)
 
@@ -61,7 +78,7 @@ export async function analyzeWallets(addresses, onProgress = () => {}) {
   }
 
   // ── Fusionne les swaps dans les transactions ──
-  const enrichedTransactions = transactions.map((tx) =>
+  const enrichedTransactions = allTransactions.map((tx) =>  // ← allTransactions
     enrichedSwaps.has(tx.hash)
       ? { ...tx, swap: enrichedSwaps.get(tx.hash) }
       : tx
@@ -77,7 +94,7 @@ export async function analyzeWallets(addresses, onProgress = () => {}) {
 
   onProgress({ step: 'done', percent: 100, message: 'Analyse terminée' })
 
-  return { ...stats, meta }
+  return { ...stats }
 }
 
 async function apiFetch(url, options = {}) {
