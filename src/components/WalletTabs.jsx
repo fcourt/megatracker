@@ -5,7 +5,7 @@ import SwapChart from './SwapChart.jsx'
 import ContractsTable from './ContractsTable.jsx'
 
 export default function WalletTabs({ wallets, perWallet }) {
-  const [active, setActive] = useState(wallets[0] ?? '')
+  const [active, setActive] = useState(wallets[0]?.toLowerCase() ?? '')
 
   if (!wallets.length) {
     return (
@@ -15,7 +15,7 @@ export default function WalletTabs({ wallets, perWallet }) {
     )
   }
 
-  const walletData = perWallet?.[active]
+  const walletData = perWallet?.[active] ?? perWallet?.[active.toLowerCase()]
 
   return (
     <div>
@@ -24,7 +24,7 @@ export default function WalletTabs({ wallets, perWallet }) {
           <button
             key={addr}
             className={`tab${active === addr ? ' active' : ''}`}
-            onClick={() => setActive(addr)}
+            onClick={() => setActive(addr.toLowerCase())}
             title={addr}
           >
             {shortAddr(addr)}
