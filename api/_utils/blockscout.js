@@ -41,15 +41,13 @@ export async function getAddressTransactions(address, maxPages = 5) {
   let nextPageParams = null
   let page = 0
 
+  // ── Phase 1 : listing paginé ──
   while (page < maxPages) {
-    // Pas de paramètre filter — Blockscout v9 retourne toutes les txs par défaut
     const params = { ...(nextPageParams ?? {}) }
-
     const data = await bsFetch(`/addresses/${address}/transactions`, params)
     await sleep(DELAY_MS)
 
-    const items = data.items ?? []
-    for (const tx of items) {
+    for (const tx of data.items ?? []) {
       transactions.push(normalizeTx(tx, address))
     }
 
@@ -58,6 +56,29 @@ export async function getAddressTransactions(address, maxPages = 5) {
       page++
     } else {
       break
+    }
+  }
+
+  // ── Phase 2 : enrichissement des swaps candidats ──
+  // On ne fetch le détail que des txs vers un contrat (méthode != null)
+  // pour limiter les appels API
+  const candidates = transactions.filter(
+    (tx) => tx.contractAddress !== null && tx.status === 'success'
+  )
+
+  // Fetch en série avec délai pour respecter le rate-limit Blockscout
+  for (const tx of candidates) {
+    try {
+      const detail = await bsFetch(`/transactions/${tx.hash}`)
+      await sleep(DELAY_MS)
+
+      const swap = extractSwapFromTx(detail, address)
+      if (swap) {
+        const idx = transactions.findIndex((t) => t.hash === tx.hash)
+        if (idx !== -1) transactions[idx] = { ...transactions[idx], swap }
+      }
+    } catch (err) {
+      console.warn(`[enrich] Échec ${tx.hash}:`, err.message)
     }
   }
 
