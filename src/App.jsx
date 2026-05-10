@@ -37,6 +37,20 @@ export default function App() {
 
     const analyzeData = await analyzeRes.json()
 
+    console.log('transfer count', analyzeData.transfers?.length ?? 0)
+console.log(
+  'sample transfers',
+  (analyzeData.transfers ?? []).slice(0, 10).map((t) => ({
+    txHash: t.txHash,
+    wallet: t.wallet,
+    from: t.from,
+    to: t.to,
+    tokenSymbol: t.tokenSymbol,
+    tokenAddress: t.tokenAddress,
+    amount: t.amount,
+  }))
+)
+
     //retrait temporaire
     /*
     const statsRes = await fetch('/api/compute-stats', {
