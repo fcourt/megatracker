@@ -39,7 +39,7 @@ export async function bsFetch(path, params = {}) {
 // api/_utils/blockscout.js
 export async function getAddressTransactions(address, maxPages = 1, initialPageParams = null) {
   const transactions = []
-  let nextPageParams = initialPageParams  // ← reprend depuis le curseur client
+  let nextPageParams = initialPageParams
   let page = 0
 
   while (page < maxPages) {
@@ -55,12 +55,12 @@ export async function getAddressTransactions(address, maxPages = 1, initialPageP
       nextPageParams = data.next_page_params
       page++
     } else {
-      nextPageParams = null
+      nextPageParams = null  // ← plus de pages disponibles
       break
     }
   }
 
-  // Retourne aussi le curseur pour la prochaine page
+  // ✅ Retourne un objet avec le curseur pour la page suivante
   return { transactions, nextPageParams }
 }
 
