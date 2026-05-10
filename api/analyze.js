@@ -37,7 +37,9 @@ export default async function handler(req, res) {
     return res.status(405).json({ message: 'Méthode non autorisée' })
   }
 
-  const { addresses } = req.body ?? {}
+  //const { addresses } = req.body ?? {}
+  // api/analyze.js — dans le body de la requête
+  const { addresses, nextPageParams = null } = req.body ?? {}
 
   // ── Validation ──────────────────────────────────────────
   if (!Array.isArray(addresses) || addresses.length === 0) {
