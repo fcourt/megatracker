@@ -11,9 +11,6 @@
  * @param {NormalizedTransfer[]} allTransfers - tous les token transfers
  * @returns {{ global: DashboardData, perWallet: Record<string, DashboardData> }}
  */
-// Ajoute cet import en haut de api/_utils/stats.js
-import { KNOWN_DEX_CONTRACTS } from './rpc.js'
-
 export function computeFullStats(addresses, allTxs, allTransfers) {
   const perWallet = {}
 
@@ -158,83 +155,28 @@ function computeWalletStats(address, txs, transfers) {
 /* ── Détection des swaps ── */
 
 /**
- * Détecte les swaps via deux méthodes combinées :
- * 1. Transactions envoyées à un routeur DEX connu
- * 2. Transactions où le wallet a émis ET reçu des ERC-20 différents (même txHash)
+ * Extrait les swaps directement depuis le champ tx.swap
+ * pré-calculé par blockscout.js lors de la normalisation.
  */
-function detectSwaps(txs, transfers) {
-  // Groupe les transfers par txHash
-  const transfersByTx = new Map()
-  for (const t of transfers) {
-    if (!transfersByTx.has(t.txHash)) transfersByTx.set(t.txHash, [])
-    transfersByTx.get(t.txHash).push(t)
-  }
-
-  const swaps = []
-  const txMap = new Map(txs.map((t) => [t.hash, t]))
-  const processedHashes = new Set()
-
-  // Méthode 1 : tx vers un routeur DEX connu
-  for (const tx of txs) {
-    if (!tx.contractAddress) continue
-    const knownProtocol = KNOWN_DEX_CONTRACTS[tx.contractAddress.toLowerCase()]
-    if (!knownProtocol || knownProtocol === 'WETH') continue
-    if (processedHashes.has(tx.hash)) continue
-
-    const txTransfers = transfersByTx.get(tx.hash) ?? []
-    const wallet = tx.wallet
-    const outbound = txTransfers.filter((t) => t.from === wallet)
-    const inbound  = txTransfers.filter((t) => t.to   === wallet)
-
-    if (outbound.length > 0 && inbound.length > 0) {
-      processedHashes.add(tx.hash)
-      swaps.push(buildSwap(tx.hash, wallet, outbound[0], inbound[inbound.length - 1], knownProtocol))
-    } else if (txTransfers.length === 0) {
-      // Swap natif ETH → token ou token → ETH sans transfers ERC-20 visibles
-      processedHashes.add(tx.hash)
-      swaps.push({
-        txHash:    tx.hash,
-        wallet,
-        date:      tx.date,
-        timestamp: tx.timestamp,
-        tokenIn:   'ETH',
-        tokenOut:  '?',
-        amountIn:  toDecimal(tx.value, 18),
-        amountOut: 0,
-        valueUsd:  toDecimal(tx.value, 18) * 3200, // estimation ETH
-        protocol:  knownProtocol,
-      })
-    }
-  }
-
-  // Méthode 2 : transfers ERC-20 in + out dans le même tx (DEX inconnu)
-  for (const [txHash, txTransfers] of transfersByTx) {
-    if (processedHashes.has(txHash)) continue
-    if (txTransfers.length < 2) continue
-
-    const wallet = txTransfers[0].wallet
-    const outbound = txTransfers.filter((t) => t.from === wallet)
-    const inbound  = txTransfers.filter((t) => t.to   === wallet)
-
-    if (outbound.length === 0 || inbound.length === 0) continue
-
-    const tx = txMap.get(txHash)
-    processedHashes.add(txHash)
-
-    swaps.push(buildSwap(
-      txHash,
-      wallet,
-      outbound[0],
-      inbound[inbound.length - 1],
-      tx?.contractName ?? 'DEX inconnu'
-    ))
-  }
-
-  return swaps.sort((a, b) =>
-    (b.timestamp ?? '') > (a.timestamp ?? '') ? 1 : -1
-  )
+function detectSwaps(txs) {
+  return txs
+    .filter((tx) => tx.swap !== null && tx.status === 'success')
+    .map((tx) => ({
+      txHash:      tx.hash,
+      wallet:      tx.wallet,
+      date:        tx.date,
+      timestamp:   tx.timestamp,
+      tokenIn:     tx.swap.tokenBought,
+      tokenOut:    tx.swap.tokenSold,
+      amountIn:    tx.swap.amountBought,
+      amountOut:   tx.swap.amountSold,
+      valueUsd:    tx.swap.volumeUsd,
+      protocol:    tx.swap.protocol,
+    }))
+    .sort((a, b) => (b.timestamp ?? '') > (a.timestamp ?? '') ? 1 : -1)
 }
 
+/*
 function buildSwap(txHash, wallet, tokenInTransfer, tokenOutTransfer, protocol) {
   return {
     txHash,
@@ -249,6 +191,7 @@ function buildSwap(txHash, wallet, tokenInTransfer, tokenOutTransfer, protocol) 
     protocol,
   }
 }
+*/
 /* ── Helpers ── */
 
 function emptyStats() {
@@ -332,6 +275,7 @@ const PRICE_ESTIMATES = {
   MEGA: 0.126,
 }
 
+/*
 function estimateSwapValueUsd(tokenIn, tokenOut) {
   const amountIn  = toDecimal(tokenIn.amount, tokenIn.decimals)
   const amountOut = toDecimal(tokenOut.amount, tokenOut.decimals)
@@ -343,3 +287,4 @@ function estimateSwapValueUsd(tokenIn, tokenOut) {
   if (priceOut != null && priceOut > 0) return amountOut * priceOut
   return 0
 }
+*/
