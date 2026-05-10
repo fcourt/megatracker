@@ -4,11 +4,11 @@
  */
 
 const BASE_URL = 'https://megaeth.blockscout.com/api/v2'
-const DELAY_MS = 150
+export const DELAY_MS = 150
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+export const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
-async function bsFetch(path, params = {}) {
+export async function bsFetch(path, params = {}) {
   const url = new URL(`${BASE_URL}${path}`)
   Object.entries(params).forEach(([k, v]) => {
     if (v != null) url.searchParams.set(k, v)
@@ -41,7 +41,6 @@ export async function getAddressTransactions(address, maxPages = 5) {
   let nextPageParams = null
   let page = 0
 
-  // ── Phase 1 : listing paginé ──
   while (page < maxPages) {
     const params = { ...(nextPageParams ?? {}) }
     const data = await bsFetch(`/addresses/${address}/transactions`, params)
@@ -59,30 +58,7 @@ export async function getAddressTransactions(address, maxPages = 5) {
     }
   }
 
-  // ── Phase 2 : enrichissement des swaps candidats ──
-  // On ne fetch le détail que des txs vers un contrat (méthode != null)
-  // pour limiter les appels API
-  const candidates = transactions.filter(
-    (tx) => tx.contractAddress !== null && tx.status === 'success'
-    .slice(0, 15)  // ← max 15 enrichissements par wallet (~2.25s)
-  )
-
-  // Fetch en série avec délai pour respecter le rate-limit Blockscout
-  for (const tx of candidates) {
-    try {
-      const detail = await bsFetch(`/transactions/${tx.hash}`)
-      await sleep(DELAY_MS)
-
-      const swap = extractSwapFromTx(detail, address)
-      if (swap) {
-        const idx = transactions.findIndex((t) => t.hash === tx.hash)
-        if (idx !== -1) transactions[idx] = { ...transactions[idx], swap }
-      }
-    } catch (err) {
-      console.warn(`[enrich] Échec ${tx.hash}:`, err.message)
-    }
-  }
-
+  // Plus d'enrichissement ici — délégué au client via /api/enrich-swaps
   return transactions
 }
 
@@ -204,7 +180,7 @@ function normalizeTx(tx, walletAddress) {
  * @param {string} wallet - adresse normalisée en lowercase
  * @returns {SwapData|null}
  */
-function extractSwapFromTx(tx, wallet) {
+export function extractSwapFromTx(tx, wallet) {
   const transfers = tx.token_transfers ?? []
   if (transfers.length < 2) return null
 
