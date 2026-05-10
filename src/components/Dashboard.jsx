@@ -37,7 +37,7 @@ export default function Dashboard({ data, wallets }) {
       {view === 'global' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-8)' }}>
 
-          <KpiCards stats={global.stats} />
+          <KpiCards stats={global} />
 
           <div className="grid-charts">
             <div className="card">
@@ -94,11 +94,10 @@ export default function Dashboard({ data, wallets }) {
             />
             <StatMini
               label="1ère interaction"
-              value={global.stats.firstTxDate ?? '—'}
-            />
+              value={global.firstTxDate ?? '—'}            />
             <StatMini
               label="Dernière interaction"
-              value={global.stats.lastTxDate ?? '—'}
+              value={global.lastTxDate ?? '—'}
             />
           </div>
 
@@ -123,21 +122,19 @@ export default function Dashboard({ data, wallets }) {
           <div className="grid-kpi">
             <StatMini
               label="Swaps totaux"
-              value={global.stats.totalSwaps ?? 0}
+              value={global.totalSwaps ?? 0}
             />
             <StatMini
               label="Volume total (USD)"
-              value={formatUSD(global.stats.totalSwapVolumeUsd)}
+              value={formatUSD(global.totalSwapVolumeUsd)}
             />
             <StatMini
               label="Volume moyen / swap"
-              value={global.stats.totalSwaps
-                ? formatUSD(global.stats.totalSwapVolumeUsd / global.stats.totalSwaps)
-                : '—'}
+              value={global.totalSwaps ? formatUSD(global.totalSwapVolumeUsd / global.totalSwaps) : '—'}
             />
             <StatMini
               label="Protocoles uniques"
-              value={global.stats.uniqueProtocols ?? '—'}
+              value={global.uniqueProtocols ?? '—'}
             />
           </div>
 
