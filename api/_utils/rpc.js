@@ -120,8 +120,14 @@ export const KNOWN_DEX_CONTRACTS = {
   '0x47837eb80db5908eabba9105626d9b348bea7b02': 'Uniswap V3',   // UniversalRouter
   '0x3a5f0cd7d62452b7f899b2a5758bfa57be0de478': 'Uniswap V3',   // Factory
 
-  // ── WETH MegaETH ──
+  // ── Kumbaya DEX (fork Uniswap V3 natif MegaETH) ──
+  '0xe5bbef8de2db447a7432a47eba58924d94ee470e': 'Kumbaya',      // SwapRouter02
+
+  // ── Tokens MegaETH ──
   '0x4200000000000000000000000000000000000006': 'WETH',
+  '0xfafddbb3fc7688494971a79cc65dca3ef82079e7': 'USDM',         // MegaUSD
+  '0xb8ce59fc3717ada4c02eadf9682a9e934f625ebb': 'USDT0',
+  
 
   // ── DEX natifs MegaETH (adresses à compléter quand publiées) ──
   // Kumbaya DEX — DEX spot natif MegaETH
