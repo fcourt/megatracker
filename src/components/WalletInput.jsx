@@ -46,7 +46,7 @@ export default function WalletInput({ onAnalyze, loading }) {
       return
     }
     setValidationError(null)
-    onAnalyze(validAddresses)
+    onAnalyze(validAddresses.map(a => a.toLowerCase()))
   }
 
   const loadExample = () => {
