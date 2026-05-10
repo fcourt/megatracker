@@ -19,7 +19,6 @@ export default function WalletTabs({ wallets, perWallet }) {
 
   return (
     <div>
-      {/* Onglets par adresse */}
       <div className="tabs" style={{ marginBottom: 'var(--space-6)' }}>
         {wallets.map((addr) => (
           <button
@@ -33,26 +32,19 @@ export default function WalletTabs({ wallets, perWallet }) {
         ))}
       </div>
 
-      {/* Adresse complète + lien */}
       <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 'var(--space-3)',
-        marginBottom: 'var(--space-6)',
-        flexWrap: 'wrap',
+        display: 'flex', alignItems: 'center', gap: 'var(--space-3)',
+        marginBottom: 'var(--space-6)', flexWrap: 'wrap',
       }}>
         <span style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize: 'var(--text-xs)',
-          color: 'var(--muted-foreground)',
-          wordBreak: 'break-all',
+          fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)',
+          color: 'var(--muted-foreground)', wordBreak: 'break-all',
         }}>
           {active}
         </span>
         <a
           href={`https://megaeth.blockscout.com/address/${active}`}
-          target="_blank"
-          rel="noopener noreferrer"
+          target="_blank" rel="noopener noreferrer"
           className="badge badge-primary"
           style={{ textDecoration: 'none', flexShrink: 0 }}
         >
@@ -60,20 +52,16 @@ export default function WalletTabs({ wallets, perWallet }) {
         </a>
       </div>
 
-      {/* Contenu du wallet actif */}
       {!walletData ? (
         <div className="empty-state">
-          <p style={{ fontSize: 'var(--text-sm)' }}>
-            Aucune donnée pour cette adresse.
-          </p>
+          <p style={{ fontSize: 'var(--text-sm)' }}>Aucune donnée pour cette adresse.</p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-8)' }}>
 
-          {/* KPIs individuels */}
+          {/* ✅ walletData directement, pas walletData.stats */}
           <KpiCards stats={walletData} />
 
-          {/* Graphiques */}
           <div className="grid-charts">
             <div className="card">
               <div className="card-header">
@@ -81,7 +69,6 @@ export default function WalletTabs({ wallets, perWallet }) {
               </div>
               <TxChart data={walletData.txTimeSeries} />
             </div>
-
             <div className="card">
               <div className="card-header">
                 <h2 className="card-title">Volume de swaps (USD)</h2>
@@ -90,25 +77,18 @@ export default function WalletTabs({ wallets, perWallet }) {
             </div>
           </div>
 
-          {/* Contrats de ce wallet */}
           <div className="card">
             <div className="card-header">
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h2 className="card-title">Contrats interagis</h2>
-                <span className="badge">
-                  {walletData.contracts?.length ?? 0} uniques
-                </span>
+                <span className="badge">{walletData.contracts?.length ?? 0} uniques</span>
               </div>
             </div>
             <ContractsTable contracts={walletData.contracts ?? []} />
           </div>
 
-          {/* Infos complémentaires */}
           <div className="grid-kpi">
+            {/* ✅ walletData.xxx directement, pas walletData.stats.xxx */}
             <InfoCard label="Première transaction" value={walletData.firstTxDate ?? '—'} />
             <InfoCard label="Dernière transaction"  value={walletData.lastTxDate ?? '—'} />
             <InfoCard label="Jours actifs"          value={walletData.activeDays ?? '—'} />
@@ -128,10 +108,7 @@ function InfoCard({ label, value }) {
   return (
     <div className="card" style={{ borderTop: '2px solid var(--border)' }}>
       <div className="card-title" style={{ marginBottom: 'var(--space-2)' }}>{label}</div>
-      <div className="kpi-value" style={{
-        fontSize: 'var(--text-lg)',
-        color: 'var(--foreground)',
-      }}>
+      <div className="kpi-value" style={{ fontSize: 'var(--text-lg)', color: 'var(--foreground)' }}>
         {value}
       </div>
     </div>
