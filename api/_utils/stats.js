@@ -159,16 +159,12 @@ function computeWalletStats(address, txs, transfers) {
  * pré-calculé par blockscout.js lors de la normalisation.
  */
 function detectSwaps(txs, transfers) {
-  const txMap = new Map(
-    txs.map((tx) => [tx.hash, tx])
-  )
-
+  const txMap = new Map(txs.map((tx) => [tx.hash, tx]))
   const transfersByHash = new Map()
+
   for (const tr of transfers) {
     if (!tr.txHash) continue
-    if (!transfersByHash.has(tr.txHash)) {
-      transfersByHash.set(tr.txHash, [])
-    }
+    if (!transfersByHash.has(tr.txHash)) transfersByHash.set(tr.txHash, [])
     transfersByHash.get(tr.txHash).push(tr)
   }
 
@@ -184,7 +180,7 @@ function detectSwaps(txs, transfers) {
     const outbound = grouped.filter((t) => t.from === wallet)
     const inbound = grouped.filter((t) => t.to === wallet)
 
-    if (grouped.length >= 2) {
+     if (grouped.length >= 2) {
   console.log(
     'tx candidate JSON',
     JSON.stringify({
@@ -208,16 +204,29 @@ function detectSwaps(txs, transfers) {
 
     if (outbound.length === 0 || inbound.length === 0) continue
 
-    const tokenOutTransfer = pickLargestTransfer(outbound)
-    const tokenInTransfer = pickLargestTransfer(inbound)
+    const tokenOutTransfer = pickRelevantTransfer(outbound, 'out')
+    const tokenInTransfer = pickRelevantTransfer(inbound, 'in')
 
     if (!tokenOutTransfer || !tokenInTransfer) continue
-    if (tokenOutTransfer.tokenAddress === tokenInTransfer.tokenAddress) continue
+    if (tokenOutTransfer.tokenSymbol === tokenInTransfer.tokenSymbol) continue
 
     swaps.push(buildSwap(tx, wallet, tokenInTransfer, tokenOutTransfer))
   }
 
   return swaps.sort((a, b) => (b.timestamp ?? '').localeCompare(a.timestamp ?? ''))
+}
+
+function pickRelevantTransfer(transfers, direction) {
+  const sorted = [...transfers].sort((a, b) => {
+    const am = toDecimal(a.amount, a.decimals)
+    const bm = toDecimal(b.amount, b.decimals)
+    return bm - am
+  })
+
+  return sorted.find((t) => {
+    if (!t.tokenSymbol) return false
+    return true
+  }) ?? null
 }
 
 function pickLargestTransfer(transfers) {
