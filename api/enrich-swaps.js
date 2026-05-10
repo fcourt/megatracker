@@ -8,8 +8,7 @@
  * Limité à 10 hashes par appel pour rester sous 10s.
  * Le client appelle cette fonction en boucle jusqu'à épuisement.
  */
-
-import { bsFetch, extractSwapFromTx, DELAY_MS, sleep } from './_utils/blockscout.js'
+import { bsFetch, extractSwapFromTx, sleep, DELAY_MS } from './_utils/blockscout.js'
 
 const MAX_BATCH = 10
 
