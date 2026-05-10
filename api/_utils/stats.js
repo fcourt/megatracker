@@ -327,8 +327,9 @@ function toDecimal(rawAmount, decimals = 18) {
 const PRICE_ESTIMATES = {
   WETH: 3200, ETH: 3200,
   USDC: 1,    USDT: 1,   DAI: 1,  USDS: 1,
+  USDM: 1,     USDT0: 1,             // ← tokens natifs MegaETH
   WBTC: 65000, BTC: 65000,
-  MEGA: 0,
+  MEGA: 0.126,
 }
 
 function estimateSwapValueUsd(tokenIn, tokenOut) {
