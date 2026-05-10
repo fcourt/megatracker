@@ -50,6 +50,10 @@ console.log(
     amount: t.amount,
   }))
 )
+    console.log(
+  'sample transfers JSON',
+  JSON.stringify((analyzeData.transfers ?? []).slice(0, 10), null, 2)
+)
 
     //retrait temporaire
     /*
