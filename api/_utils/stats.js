@@ -11,6 +11,9 @@
  * @param {NormalizedTransfer[]} allTransfers - tous les token transfers
  * @returns {{ global: DashboardData, perWallet: Record<string, DashboardData> }}
  */
+// Ajoute cet import en haut de api/_utils/stats.js
+import { KNOWN_DEX_CONTRACTS } from './rpc.js'
+
 export function computeFullStats(addresses, allTxs, allTransfers) {
   const perWallet = {}
 
@@ -155,12 +158,9 @@ function computeWalletStats(address, txs, transfers) {
 /* ── Détection des swaps ── */
 
 /**
- * Détecte les swaps en repérant les transactions où le wallet
- * a émis ET reçu des transfers ERC-20 différents dans le même tx.
- *
- * @param {NormalizedTx[]}      txs
- * @param {NormalizedTransfer[]} transfers
- * @returns {SwapEvent[]}
+ * Détecte les swaps via deux méthodes combinées :
+ * 1. Transactions envoyées à un routeur DEX connu
+ * 2. Transactions où le wallet a émis ET reçu des ERC-20 différents (même txHash)
  */
 function detectSwaps(txs, transfers) {
   // Groupe les transfers par txHash
@@ -172,8 +172,44 @@ function detectSwaps(txs, transfers) {
 
   const swaps = []
   const txMap = new Map(txs.map((t) => [t.hash, t]))
+  const processedHashes = new Set()
 
+  // Méthode 1 : tx vers un routeur DEX connu
+  for (const tx of txs) {
+    if (!tx.contractAddress) continue
+    const knownProtocol = KNOWN_DEX_CONTRACTS[tx.contractAddress.toLowerCase()]
+    if (!knownProtocol || knownProtocol === 'WETH') continue
+    if (processedHashes.has(tx.hash)) continue
+
+    const txTransfers = transfersByTx.get(tx.hash) ?? []
+    const wallet = tx.wallet
+    const outbound = txTransfers.filter((t) => t.from === wallet)
+    const inbound  = txTransfers.filter((t) => t.to   === wallet)
+
+    if (outbound.length > 0 && inbound.length > 0) {
+      processedHashes.add(tx.hash)
+      swaps.push(buildSwap(tx.hash, wallet, outbound[0], inbound[inbound.length - 1], knownProtocol))
+    } else if (txTransfers.length === 0) {
+      // Swap natif ETH → token ou token → ETH sans transfers ERC-20 visibles
+      processedHashes.add(tx.hash)
+      swaps.push({
+        txHash:    tx.hash,
+        wallet,
+        date:      tx.date,
+        timestamp: tx.timestamp,
+        tokenIn:   'ETH',
+        tokenOut:  '?',
+        amountIn:  toDecimal(tx.value, 18),
+        amountOut: 0,
+        valueUsd:  toDecimal(tx.value, 18) * 3200, // estimation ETH
+        protocol:  knownProtocol,
+      })
+    }
+  }
+
+  // Méthode 2 : transfers ERC-20 in + out dans le même tx (DEX inconnu)
   for (const [txHash, txTransfers] of transfersByTx) {
+    if (processedHashes.has(txHash)) continue
     if (txTransfers.length < 2) continue
 
     const wallet = txTransfers[0].wallet
@@ -182,28 +218,37 @@ function detectSwaps(txs, transfers) {
 
     if (outbound.length === 0 || inbound.length === 0) continue
 
-    // C'est un swap : on prend le premier token envoyé et le premier reçu
-    const tokenIn  = outbound[0]
-    const tokenOut = inbound[inbound.length - 1]
     const tx = txMap.get(txHash)
+    processedHashes.add(txHash)
 
-    swaps.push({
+    swaps.push(buildSwap(
       txHash,
       wallet,
-      date:      tokenIn.date,
-      timestamp: tokenIn.timestamp,
-      tokenIn:   tokenIn.tokenSymbol,
-      tokenOut:  tokenOut.tokenSymbol,
-      amountIn:  toDecimal(tokenIn.amount, tokenIn.decimals),
-      amountOut: toDecimal(tokenOut.amount, tokenOut.decimals),
-      valueUsd:  estimateSwapValueUsd(tokenIn, tokenOut),
-      protocol:  tx?.contractName ?? null,
-    })
+      outbound[0],
+      inbound[inbound.length - 1],
+      tx?.contractName ?? 'DEX inconnu'
+    ))
   }
 
-  return swaps.sort((a, b) => (b.timestamp ?? '') > (a.timestamp ?? '') ? 1 : -1)
+  return swaps.sort((a, b) =>
+    (b.timestamp ?? '') > (a.timestamp ?? '') ? 1 : -1
+  )
 }
 
+function buildSwap(txHash, wallet, tokenInTransfer, tokenOutTransfer, protocol) {
+  return {
+    txHash,
+    wallet,
+    date:      tokenInTransfer.date,
+    timestamp: tokenInTransfer.timestamp,
+    tokenIn:   tokenInTransfer.tokenSymbol,
+    tokenOut:  tokenOutTransfer.tokenSymbol,
+    amountIn:  toDecimal(tokenInTransfer.amount, tokenInTransfer.decimals),
+    amountOut: toDecimal(tokenOutTransfer.amount, tokenOutTransfer.decimals),
+    valueUsd:  estimateSwapValueUsd(tokenInTransfer, tokenOutTransfer),
+    protocol,
+  }
+}
 /* ── Helpers ── */
 
 function emptyStats() {
